@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A newer push to the same branch cancels the run still in progress
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: the pipeline only needs to read the code
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    name: Build and test (JDK ${{ matrix.java }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # a deadlock must fail the build, not hang it
+
+    strategy:
+      fail-fast: false # let both JDKs report even if one fails
+      matrix:
+        java: [21, 25] # 21 = target release, 25 = latest
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK ${{ matrix.java }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+          cache: maven # caches ~/.m2 keyed on pom.xml
+
+      # `verify` compiles, runs the unit tests and runs any later integration checks
+      - name: Build and test
+        run: mvn --batch-mode --no-transfer-progress verify
+
+      - name: Upload test reports
+        if: failure() # only needed when something broke
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports-jdk${{ matrix.java }}
+          path: target/surefire-reports/
+          retention-days: 7

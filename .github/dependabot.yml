@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Maven dependencies (JUnit, and later Spring Boot)
+  - package-ecosystem: maven
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Keeps the actions used in the workflow up to date
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
