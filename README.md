@@ -1,4 +1,5 @@
 # Virtual Trolley
+![CI](https://github.com/Owenvurayai/virtual-trolley/actions/workflows/ci.yml/badge.svg)
 
 A multithreaded simulation of a **smart-trolley supermarket**. Customers shop with trolleys that total price and weight automatically, then walk to the till, where a cashier scans the trolley barcode and the whole basket appears on screen. No unpacking, no item-by-item scanning.
 
