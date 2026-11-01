@@ -207,4 +207,4 @@ Java 21, Maven, JUnit 5. Planned: Spring Boot, WebSocket/STOMP, Angular, RxJS, H
 
 ## Author
 
-**Your Name** · [GitHub](https://github.com/YOUR-USERNAME) · [LinkedIn](https://www.linkedin.com/in/YOUR-PROFILE)
+**Owen L Vurayai** · [GitHub](https://github.com/Owenvurayai) · [LinkedIn](https://www.linkedin.com/in/owen-vurayai-a71922266)
