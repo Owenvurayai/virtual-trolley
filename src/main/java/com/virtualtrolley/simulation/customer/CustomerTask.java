@@ -10,6 +10,7 @@ import com.virtualtrolley.events.EventType;
 import com.virtualtrolley.payment.PaymentFailedException;
 import com.virtualtrolley.simulation.cashier.CheckoutQueue;
 import com.virtualtrolley.simulation.cashier.CheckoutRequest;
+import com.virtualtrolley.simulation.control.PauseGate;
 import com.virtualtrolley.simulation.pool.TrolleyPool;
 import com.virtualtrolley.store.Inventory;
 import com.virtualtrolley.store.ProductCatalog;
@@ -41,12 +42,13 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
     private final CheckoutQueue checkoutQueue;
     private final ShoppingStrategy strategy;
     private final EventBus bus;
+    private final PauseGate gate;
     private final Random random;
     private boolean paid; // confined to this task's thread, so no synchronisation needed
 
     public CustomerTask(int number, SimulationConfig config, ProductCatalog catalog, Inventory inventory,
                         TrolleyPool pool, CheckoutQueue checkoutQueue, ShoppingStrategy strategy,
-                        EventBus bus) {
+                        EventBus bus, PauseGate gate) {
         this.id = "customer-" + number;
         this.config = config;
         this.catalog = catalog;
@@ -55,6 +57,7 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
         this.checkoutQueue = checkoutQueue;
         this.strategy = strategy;
         this.bus = bus;
+        this.gate = gate;
         this.random = new Random(config.seed() + number); // per-customer seed => reproducible lists
     }
 
@@ -84,6 +87,7 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
     private void shop(Trolley trolley) throws InterruptedException {
         List<Product> added = new ArrayList<>();
         for (Product product : strategy.chooseItems(catalog, random)) {
+            gate.awaitOpen();                                  // pause point
             Delays.sleepUpTo(random, config.maxShopDelayMs()); // walking to the shelf
             if (inventory.tryTake(product.id())) {             // atomic: only one customer gets the last unit
                 trolley.add(id, product);
@@ -108,6 +112,7 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
     }
 
     private CustomerOutcome checkout(Trolley trolley) throws InterruptedException {
+        gate.awaitOpen(); // pause point
         trolley.proceedToCheckout(id);
         CheckoutRequest request = new CheckoutRequest(id, trolley, new CompletableFuture<>());
         bus.publish(EventType.CUSTOMER_AT_TILL, id, "Joined the checkout line (%d ahead)"

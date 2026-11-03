@@ -24,6 +24,10 @@ public final class ProductCatalog {
         return entries.stream().map(StockEntry::product).toList();
     }
 
+    public List<StockEntry> entries() {
+        return entries;
+    }
+
     public Product find(int productId) {
         return byId.get(productId);
     }

@@ -9,6 +9,7 @@ import com.virtualtrolley.events.EventType;
 import com.virtualtrolley.payment.PaymentFailedException;
 import com.virtualtrolley.payment.PaymentResult;
 import com.virtualtrolley.payment.PaymentStrategy;
+import com.virtualtrolley.simulation.control.PauseGate;
 import com.virtualtrolley.stats.SimulationStats;
 import com.virtualtrolley.util.Delays;
 import com.virtualtrolley.util.Formats;
@@ -28,10 +29,12 @@ public final class CashierTask implements Runnable {
     private final SimulationStats stats;
     private final SimulationConfig config;
     private final AtomicLong receiptSequence; // shared so receipt numbers are unique across cashiers
+    private final PauseGate gate;
     private final Random random;
 
     public CashierTask(String name, CheckoutQueue queue, PaymentStrategy payment, EventBus bus,
-                       SimulationStats stats, SimulationConfig config, AtomicLong receiptSequence) {
+                       SimulationStats stats, SimulationConfig config, AtomicLong receiptSequence,
+                       PauseGate gate) {
         this.name = name;
         this.queue = queue;
         this.payment = payment;
@@ -39,6 +42,7 @@ public final class CashierTask implements Runnable {
         this.stats = stats;
         this.config = config;
         this.receiptSequence = receiptSequence;
+        this.gate = gate;
         this.random = new Random(config.seed() ^ name.hashCode());
     }
 
@@ -50,6 +54,7 @@ public final class CashierTask implements Runnable {
                 if (request.isPoisonPill()) {
                     break;
                 }
+                gate.awaitOpen(); // pause point
                 serve(request);
             }
         } catch (InterruptedException e) {

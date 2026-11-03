@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Virtual Trolley monitor</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root { --bg:#fff; --fg:#1b1b1b; --muted:#6b6b6b; --line:#d8d8d8; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#16181b; --fg:#e8e8e8; --muted:#9aa0a6; --line:#33373d; } }
+  body { font:14px system-ui, sans-serif; margin:1rem; background:var(--bg); color:var(--fg); }
+  button { margin-right:.4rem; padding:.35rem .8rem; }
+  #status { font-weight:600; margin-left:.5rem; }
+  #log { margin-top:1rem; height:60vh; overflow:auto; border:1px solid var(--line); padding:.5rem;
+         font:12px ui-monospace, Consolas, monospace; white-space:pre-wrap; }
+  .meta { color:var(--muted); }
+</style>
+</head>
+<body>
+<h3>Virtual Trolley monitor <span class="meta">(debug page; the Angular app replaces this)</span></h3>
+<div>
+  <button onclick="cmd('start')">Start</button><button onclick="cmd('pause')">Pause</button>
+  <button onclick="cmd('resume')">Resume</button><button onclick="cmd('reset')">Reset</button>
+  <span id="status">...</span> <span id="conn" class="meta"></span>
+</div>
+<div id="log"></div>
+<script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+<script>
+  let lastSeq = 0;
+  const log = document.getElementById('log');
+
+  function show(e) {
+    if (e.seq <= lastSeq) return;            // already covered by the snapshot
+    lastSeq = e.seq;
+    log.textContent += `#${e.seq} ${e.type} ${e.actor}: ${e.message}\n`;
+    log.scrollTop = log.scrollHeight;
+    if (e.type.startsWith('SIMULATION_')) refreshStatus();
+  }
+  async function refreshStatus() {
+    const s = await (await fetch('/api/simulation/state')).json();
+    document.getElementById('status').textContent =
+      `${s.status} | sold ${s.stats.salesCount} | queue ${s.stats.queueLength}`;
+    return s;
+  }
+  async function cmd(name) {
+    const r = await fetch('/api/simulation/' + name, { method: 'POST' });
+    if (!r.ok) log.textContent += `! ${name}: ${(await r.json()).error}\n`;
+    if (name === 'reset') { log.textContent = ''; }
+    refreshStatus();
+  }
+
+  (async () => {
+    // 1. snapshot first, 2. then the live stream; seq numbers stop duplicates
+    const s = await refreshStatus();
+    lastSeq = s.lastSeq;
+    s.recentEvents.forEach(show);
+    const client = new StompJs.Client({
+      brokerURL: `ws://${location.host}/ws`,
+      onConnect: () => {
+        document.getElementById('conn').textContent = 'live';
+        client.subscribe('/topic/events', m => JSON.parse(m.body).forEach(show));
+      },
+      onWebSocketClose: () => document.getElementById('conn').textContent = 'disconnected'
+    });
+    client.activate();
+  })();
+</script>
+</body>
+</html>

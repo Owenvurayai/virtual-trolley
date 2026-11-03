@@ -1,0 +1,23 @@
+spring:
+  application:
+    name: virtual-trolley
+
+server:
+  port: 8080
+
+trolley:
+  cors:
+    # Angular dev server; comma-separate to allow more
+    allowed-origins: http://localhost:4200,http://localhost:8080
+  simulation:
+    seed: 42
+    total-customers: 10
+    batch-size: 5
+    trolley-count: 5
+    cashier-count: 2
+    min-items: 3
+    max-items: 6
+    max-shop-delay-ms: 400
+    max-cashier-delay-ms: 900
+    payment-failure-rate: 0.10
+    checkout-timeout-ms: 600000

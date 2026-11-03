@@ -3,6 +3,8 @@ package com.virtualtrolley.simulation.pool;
 import com.virtualtrolley.domain.model.Trolley;
 import com.virtualtrolley.domain.model.TrolleyState;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 
@@ -13,13 +15,18 @@ import java.util.concurrent.LinkedBlockingQueue;
 public final class TrolleyPool {
 
     private final BlockingQueue<Trolley> available = new LinkedBlockingQueue<>();
+    private final List<Trolley> all; // every trolley, in or out of circulation (for snapshots)
     private final int size;
 
     public TrolleyPool(int size) {
         this.size = size;
+        List<Trolley> trolleys = new ArrayList<>(size);
         for (int i = 1; i <= size; i++) {
-            available.add(new Trolley(i, "TRL-%04d".formatted(i)));
+            Trolley trolley = new Trolley(i, "TRL-%04d".formatted(i));
+            trolleys.add(trolley);
+            available.add(trolley);
         }
+        this.all = List.copyOf(trolleys);
     }
 
     /** Blocks until a trolley is free, then locks it to the customer. */
@@ -40,6 +47,10 @@ public final class TrolleyPool {
             trolley.reset();
         }
         available.add(trolley);
+    }
+
+    public List<Trolley> all() {
+        return all;
     }
 
     public int availableCount() {
