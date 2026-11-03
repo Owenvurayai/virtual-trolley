@@ -1,0 +1,14 @@
+/* Design tokens: light by default, dark when the OS asks for it */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --fg: #1b1d21; --muted: #6a7078; --line: #d9dde3;
+  --accent: #2563eb; --ok: #15803d; --warn: #b45309; --bad: #b91c1c;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a; --surface: #1b1e23; --fg: #e8eaed; --muted: #9aa0a8; --line: #2e333a;
+    --accent: #3b82f6; --ok: #4ade80; --warn: #fbbf24; --bad: #f87171;
+  }
+}
+html, body { margin: 0; height: 100%; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 system-ui, -apple-system, 'Segoe UI', sans-serif; }

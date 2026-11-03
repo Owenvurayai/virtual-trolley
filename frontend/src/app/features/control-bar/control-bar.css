@@ -1,0 +1,29 @@
+:host { display: block; }
+
+.bar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between; }
+.buttons { display: flex; gap: 0.5rem; }
+
+button {
+  padding: 0.45rem 1rem; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg); font: inherit;
+}
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+button:not(:disabled):hover { filter: brightness(1.1); }
+
+.pills { display: flex; gap: 0.5rem; align-items: center; }
+.pill {
+  display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.7rem;
+  border-radius: 999px; border: 1px solid var(--line); font-size: 0.8rem; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.status[data-status='RUNNING'] { color: var(--ok); border-color: var(--ok); }
+.status[data-status='PAUSED'] { color: var(--warn); border-color: var(--warn); }
+.status[data-status='FINISHED'] { color: var(--accent); border-color: var(--accent); }
+
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.conn[data-conn='live'] .dot { background: var(--ok); }
+.conn[data-conn='connecting'] .dot { background: var(--warn); }
+.conn[data-conn='disconnected'] .dot { background: var(--bad); }
+
+.error { margin: 0.75rem 0 0; color: var(--bad); font-size: 0.9rem; }

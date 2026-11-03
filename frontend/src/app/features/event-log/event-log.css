@@ -1,0 +1,32 @@
+:host { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+
+.toolbar { display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.chips { display: flex; gap: 0.35rem; }
+.chip {
+  padding: 0.2rem 0.75rem; border-radius: 999px; border: 1px solid var(--line);
+  background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 0.8rem; text-transform: capitalize;
+}
+.chip.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.meta { display: flex; gap: 1rem; align-items: center; color: var(--muted); font-size: 0.8rem; }
+.follow { display: inline-flex; gap: 0.3rem; align-items: center; cursor: pointer; }
+
+.log {
+  flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--surface); font: 12px/1.5 ui-monospace, Consolas, monospace;
+}
+.row { display: grid; grid-template-columns: 6.5rem 11rem 7rem 1fr; gap: 0.6rem; padding: 0.15rem 0.6rem; border-bottom: 1px solid var(--line); }
+.row:last-child { border-bottom: 0; }
+.time, .actor { color: var(--muted); }
+.type { font-weight: 600; }
+.msg { white-space: pre-wrap; overflow-wrap: anywhere; } /* receipts are multi-line */
+
+.row[data-cat='shopping'] .type { color: var(--accent); }
+.row[data-cat='checkout'] .type { color: var(--ok); }
+.row[data-cat='system'] .type { color: var(--muted); }
+.row[data-cat='warn'] .type { color: var(--warn); }
+
+.empty { margin: 0; padding: 1.5rem; text-align: center; color: var(--muted); }
+
+@media (max-width: 700px) {
+  .row { grid-template-columns: 1fr; gap: 0; padding: 0.4rem 0.6rem; }
+}

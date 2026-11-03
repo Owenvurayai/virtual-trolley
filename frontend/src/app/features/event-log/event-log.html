@@ -1,0 +1,26 @@
+<div class="toolbar">
+  <div class="chips" role="group" aria-label="Filter events">
+    @for (c of categories; track c) {
+      <button type="button" class="chip" [class.active]="category() === c" (click)="setCategory(c)">{{ c }}</button>
+    }
+  </div>
+  <div class="meta">
+    <span>{{ visible().length }} / {{ total() }} events</span>
+    <label class="follow">
+      <input type="checkbox" [checked]="follow()" (change)="toggleFollow()" /> follow
+    </label>
+  </div>
+</div>
+
+<div class="log" #scroller>
+  @for (event of visible(); track event.seq) {
+    <div class="row" [attr.data-cat]="categoryOf(event)">
+      <span class="time">{{ event.at | date: 'HH:mm:ss.SSS' }}</span>
+      <span class="type">{{ event.type }}</span>
+      <span class="actor">{{ event.actor }}</span>
+      <span class="msg">{{ event.message }}</span>
+    </div>
+  } @empty {
+    <p class="empty">No events yet. Press Start to begin a run.</p>
+  }
+</div>

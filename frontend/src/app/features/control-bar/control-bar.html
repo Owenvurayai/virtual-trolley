@@ -1,0 +1,19 @@
+<div class="bar">
+  <div class="buttons">
+    <button type="button" class="primary" (click)="store.start()" [disabled]="!store.canStart()">Start</button>
+    <button type="button" (click)="store.pause()" [disabled]="!store.canPause()">Pause</button>
+    <button type="button" (click)="store.resume()" [disabled]="!store.canResume()">Resume</button>
+    <button type="button" (click)="store.reset()" [disabled]="!store.canReset()">Reset</button>
+  </div>
+
+  <div class="pills">
+    <span class="pill status" [attr.data-status]="store.status()">{{ store.status() }}</span>
+    <span class="pill conn" [attr.data-conn]="store.connection()">
+      <span class="dot"></span>{{ store.connection() }}
+    </span>
+  </div>
+</div>
+
+@if (store.error(); as message) {
+  <p class="error" role="alert">{{ message }}</p>
+}
