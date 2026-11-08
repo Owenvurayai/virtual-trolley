@@ -1,0 +1,10 @@
+.dash { display: grid; gap: 1rem; grid-template-columns: 1fr; align-items: start; }
+.controls { grid-column: 1 / -1; }
+.side { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+.log { display: flex; flex-direction: column; height: 340px; }
+
+/* Wide screens: map on the left, numbers and log on the right */
+@media (min-width: 900px) {
+  .dash { grid-template-columns: minmax(320px, 480px) 1fr; }
+  .log { height: 420px; }
+}

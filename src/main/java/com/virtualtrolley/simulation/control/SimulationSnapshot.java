@@ -28,6 +28,17 @@ public record SimulationSnapshot(SimulationStatus status, long lastSeq, List<Tro
     public record StockView(int productId, int available) {
     }
 
-    public record StatsView(long revenueCents, int salesCount, int queueLength) {
+    /** Cashier utilisation is busy time as a share of active (un-paused) run time. */
+    public record StatsView(long revenueCents, int salesCount, int queueLength,
+                            long avgQueueWaitMs, long maxQueueWaitMs,
+                            int batchesCompleted, long lastBatchMs,
+                            long activeElapsedMs, List<CashierLoad> cashiers) {
+
+        public static StatsView empty() {
+            return new StatsView(0, 0, 0, 0, 0, 0, 0, 0, List.of());
+        }
+    }
+
+    public record CashierLoad(String name, long busyMs, int utilisationPct) {
     }
 }

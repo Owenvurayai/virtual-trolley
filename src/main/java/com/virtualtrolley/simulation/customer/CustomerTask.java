@@ -19,6 +19,7 @@ import com.virtualtrolley.util.Formats;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -66,7 +67,8 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
         Trolley trolley = pool.acquire(id); // blocks until a trolley is free
         try {
             bus.publish(EventType.TROLLEY_TAKEN, id,
-                    "Took trolley #%d (%s), now locked".formatted(trolley.id(), trolley.barcode()));
+                    "Took trolley #%d (%s), now locked".formatted(trolley.id(), trolley.barcode()),
+                    Map.of("trolleyId", trolley.id()));
             shop(trolley);
             return checkout(trolley);
         } catch (InterruptedException e) {
@@ -78,7 +80,8 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
                 returnGoodsToShelves(trolley);
             }
             pool.release(trolley);
-            bus.publish(EventType.TROLLEY_RESET, id, "Trolley #%d reset and returned".formatted(trolley.id()));
+            bus.publish(EventType.TROLLEY_RESET, id, "Trolley #%d reset and returned".formatted(trolley.id()),
+                    Map.of("trolleyId", trolley.id()));
         }
     }
 
@@ -87,16 +90,24 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
     private void shop(Trolley trolley) throws InterruptedException {
         List<Product> added = new ArrayList<>();
         for (Product product : strategy.chooseItems(catalog, random)) {
-            gate.awaitOpen();                                  // pause point
-            Delays.sleepUpTo(random, config.maxShopDelayMs()); // walking to the shelf
-            if (inventory.tryTake(product.id())) {             // atomic: only one customer gets the last unit
+            gate.awaitOpen(); // pause point
+
+            // Announce the walk BEFORE sleeping, with its duration, so the map can animate to match
+            long walkMs = Delays.pick(random, config.maxShopDelayMs());
+            bus.publish(EventType.CUSTOMER_WALKING, id, "Walking to " + product.name(),
+                    Map.of("productId", product.id(), "etaMs", walkMs));
+            Delays.sleep(walkMs);
+
+            if (inventory.tryTake(product.id())) { // atomic: only one customer gets the last unit
                 trolley.add(id, product);
                 added.add(product);
                 bus.publish(EventType.ITEM_ADDED, id, "+ %-22s %9s | trolley %s, %s".formatted(
                         product.name(), Formats.money(product.priceCents()),
-                        Formats.money(trolley.totalCents()), Formats.kg(trolley.totalGrams())));
+                        Formats.money(trolley.totalCents()), Formats.kg(trolley.totalGrams())),
+                        trolleyData(trolley, product));
             } else {
-                bus.publish(EventType.OUT_OF_STOCK, id, "Sold out: " + product.name());
+                bus.publish(EventType.OUT_OF_STOCK, id, "Sold out: " + product.name(),
+                        Map.of("productId", product.id()));
             }
         }
         // Occasionally change their mind about the last item
@@ -106,7 +117,8 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
                 inventory.restock(putBack.id(), 1);
                 bus.publish(EventType.ITEM_REMOVED, id, "- %-22s %9s | trolley %s, %s".formatted(
                         putBack.name(), Formats.money(putBack.priceCents()),
-                        Formats.money(trolley.totalCents()), Formats.kg(trolley.totalGrams())));
+                        Formats.money(trolley.totalCents()), Formats.kg(trolley.totalGrams())),
+                        trolleyData(trolley, putBack));
             }
         }
     }
@@ -116,7 +128,8 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
         trolley.proceedToCheckout(id);
         CheckoutRequest request = new CheckoutRequest(id, trolley, new CompletableFuture<>());
         bus.publish(EventType.CUSTOMER_AT_TILL, id, "Joined the checkout line (%d ahead)"
-                .formatted(checkoutQueue.waiting()));
+                .formatted(checkoutQueue.waiting()),
+                Map.of("trolleyId", trolley.id(), "ahead", checkoutQueue.waiting()));
         checkoutQueue.submit(request);
         try {
             // Bounded wait: a stuck till must not hang the customer forever
@@ -136,6 +149,16 @@ public final class CustomerTask implements Callable<CustomerOutcome> {
     }
 
     // ---------- helpers ----------
+
+    /** Totals after a change, so the UI can label the trolley without parsing text. */
+    private static Map<String, Object> trolleyData(Trolley trolley, Product product) {
+        return Map.of(
+                "productId", product.id(),
+                "trolleyId", trolley.id(),
+                "itemCount", trolley.snapshot().itemCount(),
+                "totalCents", trolley.totalCents(),
+                "totalGrams", trolley.totalGrams());
+    }
 
     private void returnGoodsToShelves(Trolley trolley) {
         for (CartLine line : trolley.snapshot().lines()) {

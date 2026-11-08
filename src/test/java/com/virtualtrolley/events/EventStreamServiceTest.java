@@ -64,4 +64,25 @@ class EventStreamServiceTest {
         assertEquals(2, stream.snapshot().lastSeq());
         assertEquals(1, stream.snapshot().events().size());
     }
+
+    @Test
+    void structuredDataSurvivesTheTripToTheWire() {
+        stream.record(new SimulationEvent(EventType.ITEM_ADDED, "customer-1", "m", Instant.now(),
+                java.util.Map.of("productId", 3, "totalCents", 12_999L)));
+
+        stream.flush();
+
+        var data = sent.get(0).get(0).data();
+        assertEquals(3, data.get("productId"));
+        assertEquals(12_999L, data.get("totalCents"));
+    }
+
+    @Test
+    void eventsWithoutDataGetAnEmptyMapNotNull() {
+        stream.record(event("plain"));
+
+        stream.flush();
+
+        assertTrue(sent.get(0).get(0).data().isEmpty());
+    }
 }

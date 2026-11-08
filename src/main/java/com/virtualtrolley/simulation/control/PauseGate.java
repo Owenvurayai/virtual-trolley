@@ -12,11 +12,16 @@ public class PauseGate {
 
     private final ReentrantLock lock = new ReentrantLock();
     private final Condition reopened = lock.newCondition();
-    private boolean paused; // guarded by lock
+    private boolean paused;        // guarded by lock
+    private long pausedSinceNanos; // guarded by lock
+    private long pausedTotalNanos; // guarded by lock
 
     public void pause() {
         lock.lock();
         try {
+            if (!paused) {
+                pausedSinceNanos = System.nanoTime();
+            }
             paused = true;
         } finally {
             lock.unlock();
@@ -26,6 +31,9 @@ public class PauseGate {
     public void resume() {
         lock.lock();
         try {
+            if (paused) {
+                pausedTotalNanos += System.nanoTime() - pausedSinceNanos;
+            }
             paused = false;
             reopened.signalAll();
         } finally {
@@ -40,6 +48,17 @@ public class PauseGate {
             while (paused) { // loop guards against spurious wake-ups
                 reopened.await();
             }
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /** Total time spent paused so far, including a pause that is still in progress. */
+    public long pausedMillis() {
+        lock.lock();
+        try {
+            long nanos = pausedTotalNanos + (paused ? System.nanoTime() - pausedSinceNanos : 0);
+            return nanos / 1_000_000;
         } finally {
             lock.unlock();
         }

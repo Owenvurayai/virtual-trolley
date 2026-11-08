@@ -2,15 +2,28 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { EMPTY, Observable, catchError, filter, switchMap } from 'rxjs';
-import { SequencedEvent, SimulationSnapshot, SimulationStatus, StatusResponse } from './models';
+import {
+  Product, SequencedEvent, SimulationSnapshot, SimulationStatus, StatsView, StatusResponse,
+} from './models';
 import { SimulationApiService } from './simulation-api.service';
 import { SimulationSocketService } from './simulation-socket.service';
+import { DEFAULT_CASHIERS, ShopWorld, emptyWorld, reduceWorld, replay } from './world';
 
 /** Cap on events kept in the browser, so a long run cannot grow memory without bound. */
 export const MAX_EVENTS = 500;
+const DEFAULT_TROLLEYS = 5;
+
+const NO_STATS: StatsView = {
+  revenueCents: 0, salesCount: 0, queueLength: 0, avgQueueWaitMs: 0, maxQueueWaitMs: 0,
+  batchesCompleted: 0, lastBatchMs: 0, activeElapsedMs: 0, cashiers: [],
+};
 
 /**
  * Single source of truth for the UI.
+ *
+ * Two streams feed it:
+ *  - events (/topic/events): what just happened; drives the log, the walking customers and the tills.
+ *  - state  (/topic/state):  live numbers (trolleys, stock, stats), computed on the server.
  *
  * Catching up: on every (re)connect we load the server snapshot, then apply streamed events.
  * Each event carries a sequence number, so anything already covered by the snapshot is skipped.
@@ -24,24 +37,49 @@ export class SimulationStore {
   private readonly _events = signal<SequencedEvent[]>([]);
   private readonly _status = signal<SimulationStatus>('IDLE');
   private readonly _error = signal<string | null>(null);
+  private readonly _products = signal<Product[]>([]);
+  private readonly _state = signal<SimulationSnapshot | null>(null);
+  private readonly _world = signal<ShopWorld>(emptyWorld());
   private lastSeq = 0;
 
   readonly events = this._events.asReadonly();
   readonly status = this._status.asReadonly();
   readonly error = this._error.asReadonly();
+  readonly products = this._products.asReadonly();
+  readonly world = this._world.asReadonly();
   readonly connection = toSignal(this.socket.connection$, { initialValue: 'connecting' });
 
-  // --- derived state: which buttons make sense right now ---
+  // --- derived state ---
   readonly canStart = computed(() => this._status() === 'IDLE' || this._status() === 'FINISHED');
   readonly canPause = computed(() => this._status() === 'RUNNING');
   readonly canResume = computed(() => this._status() === 'PAUSED');
   readonly canReset = computed(() => this._status() !== 'IDLE');
 
+  readonly stats = computed(() => this._state()?.stats ?? NO_STATS);
+  readonly trolleys = computed(() => this._state()?.trolleys ?? []);
+  readonly trolleyCount = computed(() => this.trolleys().length || DEFAULT_TROLLEYS);
+  readonly cashierNames = computed(() => {
+    const names = this.stats().cashiers.map((c) => c.name);
+    return names.length > 0 ? names : DEFAULT_CASHIERS;
+  });
+  /** productId -> units on the shelf. Before the first state arrives, shelves are full. */
+  readonly stock = computed(() => {
+    const state = this._state();
+    return state
+      ? new Map(state.stock.map((s) => [s.productId, s.available] as const))
+      : new Map(this._products().map((p) => [p.id, p.initialStock] as const));
+  });
+
   constructor() {
-    // Live stream: apply every batch as it arrives
+    // What just happened: apply every batch as it arrives
     this.socket.events$
       .pipe(takeUntilDestroyed())
       .subscribe((batch) => this.applyBatch(batch));
+
+    // Live numbers
+    this.socket.state$
+      .pipe(takeUntilDestroyed())
+      .subscribe((state) => this.applyState(state));
 
     // Each time the socket becomes live, fetch the snapshot (covers page load AND reconnects)
     this.socket.connection$
@@ -58,6 +96,15 @@ export class SimulationStore {
         takeUntilDestroyed(),
       )
       .subscribe((snapshot) => this.applySnapshot(snapshot));
+
+    // The catalogue drives the shop layout; it rarely changes, so loading it on connect is plenty
+    this.socket.connection$
+      .pipe(
+        filter((state) => state === 'live'),
+        switchMap(() => this.api.products().pipe(catchError(() => EMPTY))),
+        takeUntilDestroyed(),
+      )
+      .subscribe((products) => this._products.set(products));
   }
 
   // --- commands ---
@@ -87,12 +134,14 @@ export class SimulationStore {
     }
 
     let events = this._events();
+    let world = this._world();
     for (const event of fresh) {
       // The server clears its history on start and reset; mirror that so both sides agree
       if (event.type === 'SIMULATION_STARTED' || event.type === 'SIMULATION_RESET') {
         events = [];
       }
       events = [...events, event];
+      world = reduceWorld(world, event);
       const status = statusAfter(event);
       if (status) {
         this._status.set(status);
@@ -100,18 +149,35 @@ export class SimulationStore {
       this.lastSeq = Math.max(this.lastSeq, event.seq);
     }
     this._events.set(events.slice(-MAX_EVENTS));
+    this._world.set(world);
   }
 
   applySnapshot(snapshot: SimulationSnapshot): void {
     // Events that arrived over the socket before the snapshot did, and are newer than it
     const newer = this._events().filter((event) => event.seq > snapshot.lastSeq);
-    this._events.set([...snapshot.recentEvents, ...newer].slice(-MAX_EVENTS));
+    const history = [...snapshot.recentEvents, ...newer];
+    this._events.set(history.slice(-MAX_EVENTS));
+    this._world.set(replay(history, this.cashierNamesFrom(snapshot)));
     this.lastSeq = Math.max(snapshot.lastSeq, ...newer.map((event) => event.seq));
     this._status.set(snapshot.status);
+    this._state.set(snapshot);
     this._error.set(null);
   }
 
+  /** Periodic live numbers. Their status is ignored when events have already moved past them. */
+  applyState(state: SimulationSnapshot): void {
+    this._state.set(state);
+    if (state.lastSeq >= this.lastSeq) {
+      this._status.set(state.status);
+    }
+  }
+
   // --- helpers ---
+
+  private cashierNamesFrom(snapshot: SimulationSnapshot): string[] {
+    const names = snapshot.stats.cashiers.map((c) => c.name);
+    return names.length > 0 ? names : DEFAULT_CASHIERS;
+  }
 
   private run(command: Observable<StatusResponse>): void {
     command.subscribe({

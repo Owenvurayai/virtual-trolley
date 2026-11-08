@@ -2,6 +2,7 @@ package com.virtualtrolley.events;
 
 import java.time.Clock;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
@@ -29,7 +30,11 @@ public final class EventBus {
     }
 
     public void publish(EventType type, String actor, String message) {
-        SimulationEvent event = new SimulationEvent(type, actor, message, clock.instant());
+        publish(type, actor, message, Map.of());
+    }
+
+    public void publish(EventType type, String actor, String message, Map<String, Object> data) {
+        SimulationEvent event = new SimulationEvent(type, actor, message, clock.instant(), data);
         for (Consumer<SimulationEvent> subscriber : subscribers) {
             try {
                 subscriber.accept(event);

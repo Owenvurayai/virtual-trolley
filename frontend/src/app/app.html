@@ -1,9 +1,11 @@
 <main class="shell">
   <header>
     <h1>Virtual Trolley</h1>
-    <p>Live simulation monitor</p>
+    <nav>
+      <a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Shop</a>
+      <a routerLink="/cashier" routerLinkActive="active">Cashiers</a>
+    </nav>
   </header>
 
-  <app-control-bar />
-  <app-event-log />
+  <router-outlet />
 </main>

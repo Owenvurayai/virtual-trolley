@@ -5,9 +5,11 @@ import com.virtualtrolley.config.SimulationProperties;
 import com.virtualtrolley.events.EventBus;
 import com.virtualtrolley.events.EventStreamService;
 import com.virtualtrolley.events.EventType;
+import com.virtualtrolley.events.SequencedEvent;
 import com.virtualtrolley.events.SimulationEvent;
 import com.virtualtrolley.payment.CardPayment;
 import com.virtualtrolley.simulation.batch.BatchController;
+import com.virtualtrolley.stats.SimulationStats;
 import com.virtualtrolley.stats.SimulationSummary;
 import com.virtualtrolley.store.ProductCatalog;
 import com.virtualtrolley.store.StockEntry;
@@ -18,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
@@ -40,12 +43,14 @@ public class SimulationService {
     /** One run of the simulation and the handles needed to control it. */
     private static final class Run {
         final long id;
+        final SimulationConfig config;
         final BatchController controller;
         final PauseGate gate;
         volatile Future<?> task;
 
-        Run(long id, BatchController controller, PauseGate gate) {
+        Run(long id, SimulationConfig config, BatchController controller, PauseGate gate) {
             this.id = id;
+            this.config = config;
             this.controller = controller;
             this.gate = gate;
         }
@@ -90,16 +95,31 @@ public class SimulationService {
 
     // ---------- query ----------
 
+    public SimulationStatus status() {
+        return status;
+    }
+
+    /** Full snapshot including recent events: what a freshly loaded browser fetches. */
     public SimulationSnapshot snapshot() {
+        return build(true);
+    }
+
+    /** Same shape without the event history: cheap enough to broadcast twice a second. */
+    public SimulationSnapshot state() {
+        return build(false);
+    }
+
+    private SimulationSnapshot build(boolean withEvents) {
         Run run = current;
         EventStreamService.Snapshot history = stream.snapshot();
+        List<SequencedEvent> events = withEvents ? history.events() : List.of();
 
         if (run == null) { // idle: empty shop, full shelves
             List<SimulationSnapshot.StockView> shelves = catalog.entries().stream()
                     .map(e -> new SimulationSnapshot.StockView(e.product().id(), e.initialStock()))
                     .toList();
             return new SimulationSnapshot(status, history.lastSeq(), List.of(), shelves,
-                    new SimulationSnapshot.StatsView(0, 0, 0), history.events());
+                    SimulationSnapshot.StatsView.empty(), events);
         }
 
         BatchController controller = run.controller;
@@ -109,9 +129,25 @@ public class SimulationService {
                 .map(StockEntry::product)
                 .map(p -> new SimulationSnapshot.StockView(p.id(), controller.inventory().available(p.id())))
                 .toList();
-        var stats = new SimulationSnapshot.StatsView(controller.stats().revenueCents(),
-                controller.stats().salesCount(), controller.queueLength());
-        return new SimulationSnapshot(status, history.lastSeq(), trolleys, shelves, stats, history.events());
+        return new SimulationSnapshot(status, history.lastSeq(), trolleys, shelves,
+                statsOf(run), events);
+    }
+
+    private static SimulationSnapshot.StatsView statsOf(Run run) {
+        BatchController controller = run.controller;
+        SimulationStats stats = controller.stats();
+        long elapsed = controller.activeElapsedMs();
+
+        List<SimulationSnapshot.CashierLoad> cashiers = new ArrayList<>();
+        for (int i = 1; i <= run.config.cashierCount(); i++) {
+            String name = "cashier-" + i;
+            long busy = stats.busyMs(name);
+            int pct = elapsed > 0 ? (int) Math.min(100, Math.round(100.0 * busy / elapsed)) : 0;
+            cashiers.add(new SimulationSnapshot.CashierLoad(name, busy, pct));
+        }
+        return new SimulationSnapshot.StatsView(stats.revenueCents(), stats.salesCount(),
+                controller.queueLength(), stats.avgQueueWaitMs(), stats.maxQueueWaitMs(),
+                stats.batchesCompleted(), stats.lastBatchMs(), elapsed, cashiers);
     }
 
     // ---------- command implementations (control thread only) ----------
@@ -130,7 +166,7 @@ public class SimulationService {
 
         BatchController controller = new BatchController(config, catalog,
                 new CardPayment(config.paymentFailureRate(), config.seed()), bus, gate);
-        Run run = new Run(runId, controller, gate);
+        Run run = new Run(runId, config, controller, gate);
 
         stream.clearHistory();
         current = run;

@@ -1,0 +1,32 @@
+<div class="grid">
+  <div class="card"><span class="label">Revenue</span><span class="value">{{ revenue() }}</span></div>
+  <div class="card"><span class="label">Sales</span><span class="value">{{ stats().salesCount }}</span></div>
+  <div class="card"><span class="label">In queue</span><span class="value">{{ stats().queueLength }}</span></div>
+  <div class="card"><span class="label">Shoppers in store</span><span class="value">{{ shoppers() }}</span></div>
+  <div class="card"><span class="label">Avg queue wait</span><span class="value">{{ avgWait() }}</span></div>
+  <div class="card"><span class="label">Longest wait</span><span class="value">{{ maxWait() }}</span></div>
+  <div class="card">
+    <span class="label">Batches done</span>
+    <span class="value">{{ stats().batchesCompleted }} <small>last {{ lastBatch() }}</small></span>
+  </div>
+  <div class="card"><span class="label">Run time</span><span class="value">{{ runTime() }}</span></div>
+  <div class="card">
+    <span class="label">Trolleys free</span>
+    <span class="value">{{ trolleysFree() }} <small>/ {{ trolleysTotal() }}</small></span>
+  </div>
+</div>
+
+@if (cashiers().length > 0) {
+  <h3>Cashier utilisation</h3>
+  <ul class="bars">
+    @for (c of cashiers(); track c.name) {
+      <li>
+        <span class="name">{{ c.name }}</span>
+        <span class="track" role="progressbar" [attr.aria-valuenow]="c.utilisationPct" aria-valuemin="0" aria-valuemax="100">
+          <span class="fill" [style.width.%]="c.utilisationPct"></span>
+        </span>
+        <span class="pct">{{ c.utilisationPct }}%</span>
+      </li>
+    }
+  </ul>
+}

@@ -1,7 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
-import { SimulationSnapshot, StatusResponse } from './models';
+import { Product, SimulationSnapshot, StatusResponse } from './models';
 
 /** Thin wrapper over the REST API. No state, no logic: just typed HTTP calls. */
 @Injectable({ providedIn: 'root' })
@@ -29,5 +29,9 @@ export class SimulationApiService {
 
   state(): Observable<SimulationSnapshot> {
     return this.http.get<SimulationSnapshot>(`${this.base}/state`);
+  }
+
+  products(): Observable<Product[]> {
+    return this.http.get<Product[]>('/api/products');
   }
 }

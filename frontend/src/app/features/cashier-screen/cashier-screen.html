@@ -1,0 +1,32 @@
+<div class="screens">
+  @for (cashier of cashiers(); track cashier.name) {
+    <section class="till" [attr.data-status]="cashier.status">
+      <header>
+        <h2>{{ title(cashier.name) }}</h2>
+        <span class="chip">{{ statusText(cashier) }}</span>
+      </header>
+
+      @if (cashier.cart; as cart) {
+        <p class="who">{{ cart.customerId }} <span>· trolley {{ cart.barcode }}</span></p>
+        <table>
+          <thead><tr><th>Qty</th><th>Item</th><th class="num">Amount</th></tr></thead>
+          <tbody>
+            @for (item of cart.items; track item.productId) {
+              <tr><td>{{ item.quantity }}</td><td>{{ item.name }}</td><td class="num">{{ money(item.lineCents) }}</td></tr>
+            }
+          </tbody>
+          <tfoot>
+            <tr><td colspan="2">{{ cart.itemCount }} items · {{ kg(cart.totalGrams) }}</td><td class="num total">{{ money(cart.totalCents) }}</td></tr>
+          </tfoot>
+        </table>
+      } @else {
+        <p class="idle">No basket on screen.</p>
+      }
+
+      @if (cashier.receipt; as receipt) {
+        <h3>Last receipt</h3>
+        <pre class="receipt">{{ receipt.text }}</pre>
+      }
+    </section>
+  }
+</div>

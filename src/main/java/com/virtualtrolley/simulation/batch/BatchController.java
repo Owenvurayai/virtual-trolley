@@ -52,6 +52,9 @@ public final class BatchController {
     private final CheckoutQueue checkoutQueue = new CheckoutQueue();
     private final SimulationStats stats = new SimulationStats();
 
+    private volatile long startedNanos; // 0 until run() begins
+    private volatile long endedNanos;   // 0 while running
+
     /** Console / test constructor: a gate that is never paused. */
     public BatchController(SimulationConfig config, ProductCatalog catalog,
                            PaymentStrategy payment, EventBus bus) {
@@ -72,6 +75,7 @@ public final class BatchController {
     /** Runs every batch to completion, then shuts both pools down cleanly. */
     public SimulationSummary run() throws InterruptedException {
         long startedAt = System.nanoTime();
+        startedNanos = startedAt;
         ExecutorService customerPool = Executors.newFixedThreadPool(config.batchSize(), named("customer-thread"));
         ExecutorService cashierPool = Executors.newFixedThreadPool(config.cashierCount(), named("cashier-thread"));
 
@@ -89,6 +93,7 @@ public final class BatchController {
             while (nextCustomer <= config.totalCustomers()) {
                 int size = Math.min(config.batchSize(), config.totalCustomers() - nextCustomer + 1);
                 batchNumber++;
+                long batchStartedAt = System.nanoTime();
                 bus.publish(EventType.BATCH_STARTED, "system",
                         "=== Batch %d: %d customers enter ===".formatted(batchNumber, size));
 
@@ -107,7 +112,10 @@ public final class BatchController {
                         case ABANDONED -> abandoned++;
                     }
                 }
-                bus.publish(EventType.BATCH_FINISHED, "system", "=== Batch %d complete ===".formatted(batchNumber));
+                long batchMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - batchStartedAt);
+                stats.recordBatch(batchMs);
+                bus.publish(EventType.BATCH_FINISHED, "system",
+                        "=== Batch %d complete in %.1f s ===".formatted(batchNumber, batchMs / 1000.0));
             }
         } catch (InterruptedException e) {
             cancelled = true;
@@ -123,6 +131,7 @@ public final class BatchController {
             }
             awaitQuietly(cashierPool);
             awaitQuietly(customerPool);
+            endedNanos = System.nanoTime();
         }
 
         long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
@@ -139,6 +148,20 @@ public final class BatchController {
 
     public SimulationStats stats() {
         return stats;
+    }
+
+    public SimulationConfig config() {
+        return config;
+    }
+
+    /** Run time excluding paused time; freezes when the run ends. Basis for utilisation. */
+    public long activeElapsedMs() {
+        long started = startedNanos;
+        if (started == 0) {
+            return 0;
+        }
+        long end = endedNanos != 0 ? endedNanos : System.nanoTime();
+        return Math.max(0, TimeUnit.NANOSECONDS.toMillis(end - started) - gate.pausedMillis());
     }
 
     public int queueLength() {

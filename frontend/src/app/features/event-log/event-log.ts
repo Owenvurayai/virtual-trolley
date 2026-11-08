@@ -9,7 +9,7 @@ type Category = 'all' | 'shopping' | 'checkout' | 'system';
 
 /** Which filter chip does each event type belong to? */
 const CATEGORY_OF: Record<EventType, Exclude<Category, 'all'>> = {
-  TROLLEY_TAKEN: 'shopping', TROLLEY_RESET: 'shopping',
+  TROLLEY_TAKEN: 'shopping', TROLLEY_RESET: 'shopping', CUSTOMER_WALKING: 'shopping',
   ITEM_ADDED: 'shopping', ITEM_REMOVED: 'shopping', OUT_OF_STOCK: 'shopping',
   CUSTOMER_AT_TILL: 'checkout', CART_SCANNED: 'checkout', PAYMENT_OK: 'checkout',
   PAYMENT_FAILED: 'checkout', RECEIPT_PRINTED: 'checkout', CASHIER_CLOSED: 'checkout',

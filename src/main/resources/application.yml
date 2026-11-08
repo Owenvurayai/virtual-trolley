@@ -1,6 +1,10 @@
 spring:
   application:
     name: virtual-trolley
+  task:
+    scheduling:
+      pool:
+        size: 2   # event flush (50 ms) and state broadcast (500 ms) must not block each other
 
 server:
   port: 8080
@@ -17,7 +21,7 @@ trolley:
     cashier-count: 2
     min-items: 3
     max-items: 6
-    max-shop-delay-ms: 400
-    max-cashier-delay-ms: 900
+    max-shop-delay-ms: 2500    # slowed down so the map is watchable; lower for speed
+    max-cashier-delay-ms: 3500
     payment-failure-rate: 0.10
     checkout-timeout-ms: 600000

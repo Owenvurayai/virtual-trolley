@@ -37,7 +37,7 @@ public class EventStreamService {
     /** Called from simulation threads. Cheap and non-blocking: no network I/O here. */
     public synchronized void record(SimulationEvent event) {
         SequencedEvent wire = new SequencedEvent(++seq, event.type(), event.actor(),
-                event.message(), event.at().toEpochMilli());
+                event.message(), event.at().toEpochMilli(), event.data());
         recent.addLast(wire);
         if (recent.size() > RECENT_LIMIT) {
             recent.removeFirst();

@@ -5,6 +5,7 @@ import com.virtualtrolley.domain.model.CartLine;
 import com.virtualtrolley.domain.model.CartSnapshot;
 import com.virtualtrolley.domain.model.Receipt;
 import com.virtualtrolley.events.EventBus;
+import com.virtualtrolley.events.EventData;
 import com.virtualtrolley.events.EventType;
 import com.virtualtrolley.payment.PaymentFailedException;
 import com.virtualtrolley.payment.PaymentResult;
@@ -15,6 +16,8 @@ import com.virtualtrolley.util.Delays;
 import com.virtualtrolley.util.Formats;
 
 import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -54,8 +57,11 @@ public final class CashierTask implements Runnable {
                 if (request.isPoisonPill()) {
                     break;
                 }
+                // Queue wait is measured at the moment a cashier takes the customer
+                long waitMs = (System.nanoTime() - request.enqueuedAtNanos()) / 1_000_000;
+                stats.recordQueueWait(waitMs);
                 gate.awaitOpen(); // pause point
-                serve(request);
+                serve(request, waitMs);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt(); // preserve the flag for the executor
@@ -63,11 +69,14 @@ public final class CashierTask implements Runnable {
         bus.publish(EventType.CASHIER_CLOSED, name, "Till closed");
     }
 
-    private void serve(CheckoutRequest request) throws InterruptedException {
+    private void serve(CheckoutRequest request, long waitMs) throws InterruptedException {
+        long startedAt = System.nanoTime();
         try {
             // Scan the trolley barcode: the whole basket appears, no unpacking needed
             CartSnapshot cart = request.trolley().beginScan();
-            bus.publish(EventType.CART_SCANNED, name, cartScreen(request.customerId(), cart));
+            Map<String, Object> scanData = new HashMap<>(EventData.cart(cart, request.customerId()));
+            scanData.put("waitMs", waitMs);
+            bus.publish(EventType.CART_SCANNED, name, cartScreen(request.customerId(), cart), scanData);
 
             Delays.sleepUpTo(random, config.maxCashierDelayMs()); // time to take payment
 
@@ -77,12 +86,19 @@ public final class CashierTask implements Runnable {
                         name, cart, result.method(), Instant.now());
                 stats.recordSale(receipt.totalCents());
                 bus.publish(EventType.PAYMENT_OK, name, request.customerId() + " paid "
-                        + Formats.money(receipt.totalCents()) + " by " + result.method());
-                bus.publish(EventType.RECEIPT_PRINTED, name, receiptText(receipt));
+                        + Formats.money(receipt.totalCents()) + " by " + result.method(),
+                        Map.of("customerId", request.customerId(), "totalCents", receipt.totalCents(),
+                                "method", result.method()));
+
+                Map<String, Object> receiptData = new HashMap<>(EventData.cart(cart, request.customerId()));
+                receiptData.put("receiptNumber", receipt.number());
+                receiptData.put("method", result.method());
+                bus.publish(EventType.RECEIPT_PRINTED, name, receiptText(receipt), receiptData);
                 request.result().complete(receipt);
             } else {
                 bus.publish(EventType.PAYMENT_FAILED, name,
-                        request.customerId() + ": " + result.reason());
+                        request.customerId() + ": " + result.reason(),
+                        Map.of("customerId", request.customerId(), "reason", result.reason()));
                 request.result().completeExceptionally(new PaymentFailedException(result.reason()));
             }
         } catch (InterruptedException e) {
@@ -92,6 +108,8 @@ public final class CashierTask implements Runnable {
             // One bad customer must not take the till down
             request.result().completeExceptionally(e);
             bus.publish(EventType.ERROR, name, "Failed serving " + request.customerId() + ": " + e);
+        } finally {
+            stats.recordBusy(name, (System.nanoTime() - startedAt) / 1_000_000);
         }
     }
 

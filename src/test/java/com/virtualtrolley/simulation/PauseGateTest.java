@@ -56,4 +56,23 @@ class PauseGateTest {
 
         assertTrue(interrupted.get());
     }
+
+    @Test
+    void pausedTimeIsAccumulatedAcrossPauses() throws Exception {
+        PauseGate gate = new PauseGate();
+        assertEquals(0, gate.pausedMillis());
+
+        gate.pause();
+        Thread.sleep(120);
+        gate.resume();
+        long afterFirst = gate.pausedMillis();
+        assertTrue(afterFirst >= 100, "first pause counted: " + afterFirst);
+
+        Thread.sleep(80); // running time must NOT count
+        assertEquals(afterFirst, gate.pausedMillis());
+
+        gate.pause();
+        Thread.sleep(120);
+        assertTrue(gate.pausedMillis() >= afterFirst + 100, "a pause still in progress is included");
+    }
 }
