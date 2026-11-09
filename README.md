@@ -256,4 +256,4 @@ Java 21, Spring Boot 3, WebSocket/STOMP, Maven, JUnit 5 · Angular 21, RxJS, sig
 
 ## Author
 
-**Your Name** · [GitHub](https://github.com/Owenvurayai) · [LinkedIn](https://www.linkedin.com/in/YOUR-PROFILE)
+**Your Name** · [GitHub](https://github.com/Owenvurayai) · [LinkedIn](https://www.linkedin.com/in/https://www.linkedin.com/in/owen-vurayai-a71922266?)
