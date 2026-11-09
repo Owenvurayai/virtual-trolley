@@ -11,6 +11,12 @@ import { DEFAULT_CASHIERS, ShopWorld, emptyWorld, reduceWorld, replay } from './
 
 /** Cap on events kept in the browser, so a long run cannot grow memory without bound. */
 export const MAX_EVENTS = 500;
+
+/** Shown when a command could not reach the server. Clears itself once the server is heard from again. */
+export const SERVER_UNREACHABLE = 'Server unreachable';
+
+/** Errors are transient notices: they fade on their own so an idle app never shows a stale one. */
+export const ERROR_VISIBLE_MS = 8000;
 const DEFAULT_TROLLEYS = 5;
 
 const NO_STATS: StatsView = {
@@ -37,6 +43,7 @@ export class SimulationStore {
   private readonly _events = signal<SequencedEvent[]>([]);
   private readonly _status = signal<SimulationStatus>('IDLE');
   private readonly _error = signal<string | null>(null);
+  private errorTimer?: ReturnType<typeof setTimeout>;
   private readonly _products = signal<Product[]>([]);
   private readonly _state = signal<SimulationSnapshot | null>(null);
   private readonly _world = signal<ShopWorld>(emptyWorld());
@@ -88,7 +95,7 @@ export class SimulationStore {
         switchMap(() =>
           this.api.state().pipe(
             catchError(() => {
-              this._error.set('Could not load the current state from the server');
+              this.setError('Could not load the current state from the server');
               return EMPTY; // keep the stream alive for the next reconnect
             }),
           ),
@@ -167,6 +174,9 @@ export class SimulationStore {
   /** Periodic live numbers. Their status is ignored when events have already moved past them. */
   applyState(state: SimulationSnapshot): void {
     this._state.set(state);
+    if (this._error() === SERVER_UNREACHABLE) {
+      this._error.set(null); // a push just arrived, so the server is clearly back
+    }
     if (state.lastSeq >= this.lastSeq) {
       this._status.set(state.status);
     }
@@ -185,8 +195,14 @@ export class SimulationStore {
         this._status.set(response.status); // instant feedback; the event stream confirms it
         this._error.set(null);
       },
-      error: (err: unknown) => this._error.set(describe(err)),
+      error: (err: unknown) => this.setError(describe(err)),
     });
+  }
+
+  private setError(message: string): void {
+    clearTimeout(this.errorTimer);
+    this._error.set(message);
+    this.errorTimer = setTimeout(() => this._error.set(null), ERROR_VISIBLE_MS);
   }
 }
 
@@ -210,7 +226,7 @@ function statusAfter(event: SequencedEvent): SimulationStatus | undefined {
 function describe(err: unknown): string {
   if (err instanceof HttpErrorResponse) {
     // 409 carries { error: "Cannot pause while IDLE" }; 0 means the server is unreachable
-    return err.error?.error ?? (err.status === 0 ? 'Server unreachable' : `Request failed (${err.status})`);
+    return err.error?.error ?? (err.status === 0 ? SERVER_UNREACHABLE : `Request failed (${err.status})`);
   }
   return 'Unexpected error';
 }

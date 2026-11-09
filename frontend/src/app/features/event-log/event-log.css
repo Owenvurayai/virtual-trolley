@@ -18,7 +18,9 @@
 .row:last-child { border-bottom: 0; }
 .time, .actor { color: var(--muted); }
 .type { font-weight: 600; }
-.msg { white-space: pre-wrap; overflow-wrap: anywhere; } /* receipts are multi-line */
+.msg { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Receipts and scanned baskets: keep the columns aligned and scroll sideways on a narrow screen */
+.msg.multiline { white-space: pre; overflow-x: auto; }
 
 .row[data-cat='shopping'] .type { color: var(--accent); }
 .row[data-cat='checkout'] .type { color: var(--ok); }

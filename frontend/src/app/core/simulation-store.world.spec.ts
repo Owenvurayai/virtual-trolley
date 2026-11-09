@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
-import { NEVER, of } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { NEVER, of, throwError } from 'rxjs';
 import { describe, expect, it } from 'vitest';
 import { createFakes, event, PRODUCTS, snapshot, stats } from '../testing/fakes';
 import { SimulationStore } from './simulation-store.service';
@@ -112,6 +113,29 @@ describe('SimulationStore: live numbers', () => {
     }));
 
     expect(store.cashierNames()).toEqual(['cashier-1', 'cashier-2', 'cashier-3']);
+  });
+
+  it('clears a "server unreachable" error once the server pushes state again', () => {
+    const { store, state$ } = setup({
+      start: () => throwError(() => new HttpErrorResponse({ status: 0 })),
+    });
+    store.start();
+    expect(store.error()).toBe('Server unreachable');
+
+    state$.next(snapshot({ status: 'IDLE' }));
+
+    expect(store.error()).toBeNull();
+  });
+
+  it('keeps a real rejection message visible when state arrives', () => {
+    const { store, state$ } = setup({
+      pause: () => throwError(() => new HttpErrorResponse({ status: 409, error: { error: 'Cannot pause while IDLE' } })),
+    });
+    store.pause();
+
+    state$.next(snapshot({ status: 'IDLE' }));
+
+    expect(store.error()).toBe('Cannot pause while IDLE');
   });
 
   it('ignores a state broadcast that is older than the events already seen', () => {

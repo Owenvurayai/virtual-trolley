@@ -51,6 +51,19 @@ describe('EventLog', () => {
     expect(rows().length).toBe(3);
   });
 
+  it('keeps multi-line messages such as receipts aligned instead of wrapping them', () => {
+    const { fixture, rows, events$ } = setup();
+
+    events$.next([
+      { ...event(1, 'RECEIPT_PRINTED'), message: 'RECEIPT #1\n   1 x Rice 10kg   R189.99' },
+      event(2, 'ITEM_ADDED'),
+    ]);
+    fixture.detectChanges();
+
+    expect(rows()[0].querySelector('.msg')?.classList.contains('multiline')).toBe(true);
+    expect(rows()[1].querySelector('.msg')?.classList.contains('multiline')).toBe(false);
+  });
+
   it('flags failures with the warning style', () => {
     const { fixture, rows, events$ } = setup();
 

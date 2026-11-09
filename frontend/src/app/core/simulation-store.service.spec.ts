@@ -1,9 +1,9 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createFakes, event, snapshot } from '../testing/fakes';
-import { MAX_EVENTS, SimulationStore } from './simulation-store.service';
+import { ERROR_VISIBLE_MS, MAX_EVENTS, SimulationStore } from './simulation-store.service';
 
 function setup(apiOverrides: Record<string, unknown> = {}) {
   const fakes = createFakes(apiOverrides);
@@ -139,6 +139,44 @@ describe('SimulationStore', () => {
 
       expect(store.error()).toBe('Cannot pause while IDLE');
       expect(store.status()).toBe('IDLE');
+    });
+
+    it('lets an error disappear by itself, so an idle screen never keeps a stale one', () => {
+      vi.useFakeTimers();
+      try {
+        const { store } = setup({ start: () => throwError(() => new HttpErrorResponse({ status: 0 })) });
+
+        store.start();
+        expect(store.error()).toBe('Server unreachable');
+
+        vi.advanceTimersByTime(ERROR_VISIBLE_MS - 1);
+        expect(store.error()).toBe('Server unreachable');
+        vi.advanceTimersByTime(1);
+        expect(store.error()).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('restarts the countdown when a newer error replaces an older one', () => {
+      vi.useFakeTimers();
+      try {
+        const { store } = setup({
+          start: () => throwError(() => new HttpErrorResponse({ status: 0 })),
+          pause: () => throwError(() => new HttpErrorResponse({ status: 409, error: { error: 'Cannot pause while IDLE' } })),
+        });
+
+        store.start();
+        vi.advanceTimersByTime(ERROR_VISIBLE_MS - 1000);
+        store.pause();
+        vi.advanceTimersByTime(ERROR_VISIBLE_MS - 1000); // the first timer would have fired by now
+        expect(store.error()).toBe('Cannot pause while IDLE');
+
+        vi.advanceTimersByTime(1000);
+        expect(store.error()).toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('reports an unreachable server', () => {

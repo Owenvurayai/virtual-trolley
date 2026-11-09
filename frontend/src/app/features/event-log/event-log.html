@@ -18,7 +18,7 @@
       <span class="time">{{ event.at | date: 'HH:mm:ss.SSS' }}</span>
       <span class="type">{{ event.type }}</span>
       <span class="actor">{{ event.actor }}</span>
-      <span class="msg">{{ event.message }}</span>
+      <span class="msg" [class.multiline]="event.message.includes('\n')">{{ event.message }}</span>
     </div>
   } @empty {
     <p class="empty">No events yet. Press Start to begin a run.</p>
